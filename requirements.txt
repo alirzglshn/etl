@@ -1,0 +1,8 @@
+SQLAlchemy==2.0.30
+requests==2.32.3
+
+# Engine drivers — all included so one image supports every engine
+# without rebuilding per client. Small enough cost to bundle all four.
+psycopg2-binary==2.9.9      # PostgreSQL
+PyMySQL==1.1.1              # MySQL / MariaDB
+pyodbc==5.1.0               # SQL Server (requires msodbcsql18 in the image, see Dockerfile)

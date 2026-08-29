@@ -1,0 +1,16 @@
+services:
+  sync-etl:
+    image: retano360/sync-etl:latest   # or `build: .` if building locally
+    build: .
+    container_name: retano360-sync-etl
+    restart: unless-stopped
+    env_file:
+      - .env
+    # No ports exposed — this container makes only outbound connections
+    # (to your database and to our API). It does not listen for
+    # incoming traffic of any kind.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
