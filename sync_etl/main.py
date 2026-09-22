@@ -1,17 +1,11 @@
 # sync_etl/main.py
 """
-Container entrypoint. Two modes:
-
-    RUN_ONCE=true   — run a single sync cycle and exit (exit code 0 on
-                       success/partial, 1 on failure). Useful for manual
-                       testing, or if you'd rather drive scheduling from
-                       an external cron/orchestrator instead of the
-                       built-in sleep-loop scheduler.
-
-    (default)       — start the long-running scheduler (scheduler.run_forever),
-                       which is what docker-compose.yml runs by default.
+Container entrypoint with explicit ``daemon`` and ``once`` modes. Compose
+always passes ``daemon`` so an environment variable cannot accidentally turn
+the service into a one-shot process that Docker repeatedly restarts.
 """
 
+import argparse
 import sys
 
 from sync_etl.config import load_settings_or_exit
@@ -21,17 +15,20 @@ from sync_etl.scheduler import run_forever
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("mode", nargs="?", choices=("daemon", "once"), default="daemon")
+    args = parser.parse_args()
     settings = load_settings_or_exit()
     configure_logging(settings.log_level)
     logger = get_logger()
 
     logger.info(
-        "Sync ETL starting. engine=%s host=%s db=%s api_url=%s run_once=%s",
+        "Sync ETL starting. engine=%s host=%s db=%s api_url=%s mode=%s",
         settings.db_engine, settings.db_host, settings.db_name,
-        settings.api_url, settings.run_once,
+        settings.api_url, args.mode,
     )
 
-    if settings.run_once:
+    if args.mode == "once":
         outcome = run_once(settings)
         sys.exit(0 if outcome.status in ("success", "partial") else 1)
 

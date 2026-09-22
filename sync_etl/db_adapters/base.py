@@ -130,3 +130,25 @@ class DatabaseAdapter(ABC):
                 if not chunk:
                     break
                 yield [dict(zip(column_names, row)) for row in chunk]
+
+    def fetch_incremental_rows_batched(
+        self, table_name: str, column_names: list[str], cursor_column: str,
+        after_value: Any = None, batch_size: int = 5000,
+    ):
+        """Stream rows strictly after a stable cursor, ordered by that cursor."""
+        selected = list(dict.fromkeys([*column_names, cursor_column]))
+        table = sa.table(table_name, *[sa.column(c) for c in selected])
+        cursor = table.c[cursor_column]
+        stmt = sa.select(*[table.c[c] for c in selected]).select_from(table)
+        if after_value is not None:
+            stmt = stmt.where(cursor > sa.bindparam("after_cursor"))
+        stmt = stmt.order_by(cursor.asc())
+
+        with self.engine.connect() as conn:
+            params = {"after_cursor": after_value} if after_value is not None else {}
+            result = conn.execution_options(stream_results=True).execute(stmt, params)
+            while True:
+                chunk = result.fetchmany(batch_size)
+                if not chunk:
+                    break
+                yield [dict(zip(selected, row)) for row in chunk]

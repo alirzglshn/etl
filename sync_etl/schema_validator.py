@@ -66,6 +66,33 @@ def validate_schema(
                 failure_detail=f"Table '{table_name}' does not exist in the client database.",
             )
 
+    # Each cursor is transport metadata on the entity's single source table.
+    for entity in ("user", "product"):
+        cursor = config.cursors.get(entity)
+        tables = config.tables_for_entity(entity)
+        if cursor is None or not cursor.column:
+            return SchemaValidationResult(
+                ok=False, failure_stage="schema_column",
+                failure_detail=f"No incremental cursor configured for '{entity}'.",
+            )
+        if len(tables) != 1:
+            return SchemaValidationResult(
+                ok=False, failure_stage="schema_table",
+                failure_detail=(
+                    f"Entity '{entity}' must map to exactly one table before "
+                    "its incremental cursor can be validated."
+                ),
+            )
+        table_name = next(iter(tables))
+        if not adapter.column_exists(table_name, cursor.column):
+            return SchemaValidationResult(
+                ok=False, failure_stage="schema_column",
+                failure_detail=(
+                    f"Cursor column '{cursor.column}' does not exist in "
+                    f"table '{table_name}' for entity '{entity}'."
+                ),
+            )
+
     # ── Step 2: every column must exist, except the two exempt fields ──────
     for entity in ("user", "product"):
         nullable_names = config.nullable_fields.get(entity, set())

@@ -23,10 +23,6 @@ Optional env vars:
     MAX_RETRIES           — default 5
     RETRY_BACKOFF_SECONDS — default 10 (doubles each retry, capped)
     LOG_LEVEL             — default INFO
-    RUN_ONCE              — if "true", run a single cycle and exit instead
-                             of starting the scheduler. Useful for manual
-                             testing/debugging and for running via an
-                             external cron instead of the built-in scheduler.
 """
 
 import os
@@ -57,7 +53,6 @@ class Settings:
     max_retries: int
     retry_backoff_seconds: int
     log_level: str
-    run_once: bool
 
 
 def _require(name: str) -> str:
@@ -98,7 +93,6 @@ def load_settings() -> Settings:
         max_retries=_optional_int("MAX_RETRIES", 5),
         retry_backoff_seconds=_optional_int("RETRY_BACKOFF_SECONDS", 10),
         log_level=os.environ.get("LOG_LEVEL", "INFO").upper(),
-        run_once=os.environ.get("RUN_ONCE", "false").lower() in ("1", "true", "yes"),
     )
     return settings
 

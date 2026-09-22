@@ -90,10 +90,23 @@ You never need to touch this container or redeploy it when you change
 your table/column mapping on the تنظیم API page. Configuration is
 fetched fresh from Retano360 at the start of every 24-hour cycle.
 
+## Incremental cursor requirement
+
+Configure one cursor column for the customer/order-line source and one for
+the product source on the Retano360 API configuration page. Each cursor must
+be non-null, immutable, unique, and strictly increasing (an auto-incrementing
+primary key is ideal). The ETL reads only rows whose cursor is greater than
+the last run committed by Retano360. A checkpoint advances only after both
+staging jobs are allocated and flushed successfully, so a retry cannot replay
+an already committed daily snapshot.
+
+Do not use a timestamp unless your database guarantees unique values and
+never inserts a later row with an older timestamp.
+
 ## Running a one-off manual sync (for testing)
 
 ```
-docker compose run --rm -e RUN_ONCE=true sync-etl
+docker compose run --rm sync-etl once
 ```
 
 This runs a single cycle immediately and exits, instead of starting the
@@ -132,4 +145,3 @@ docker compose up -d
 | `MAX_RETRIES` | No | `5` | Retry attempts for transient failures |
 | `RETRY_BACKOFF_SECONDS` | No | `10` | Initial backoff, doubles each retry |
 | `LOG_LEVEL` | No | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
-| `RUN_ONCE` | No | `false` | Run one cycle and exit instead of scheduling |

@@ -43,10 +43,17 @@ class SyncFieldConfig:
 
 
 @dataclass
+class SyncCursorConfig:
+    column: str
+    value: dict[str, Any] | None
+
+
+@dataclass
 class SyncConfigResponse:
     batch_size: int
     mapping: dict[str, dict[str, SyncFieldConfig]]  # entity -> field_name -> config
     nullable_fields: dict[str, set[str]]  # entity -> set of field names
+    cursors: dict[str, SyncCursorConfig]
 
     def tables_for_entity(self, entity: str) -> set[str]:
         """Distinct client table names referenced by this entity's mapping,
@@ -65,19 +72,24 @@ class SyncConfigResponse:
 
 
 class SyncApiClient:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, instance_id: str, run_id: str):
         self.settings = settings
         self.session = requests.Session()
         self.session.headers.update(
             {
                 "Authorization": f"Bearer {settings.api_key}",
                 "Content-Type": "application/json",
+                "X-Sync-Instance-ID": instance_id,
+                "X-Sync-Run-ID": run_id,
             }
         )
 
     # ── internal request helper with retry/backoff ─────────────────────────
 
-    def _request(self, method: str, path: str, json_body: dict | None = None) -> dict:
+    def _request(
+        self, method: str, path: str, json_body: dict | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> dict:
         url = f"{self.settings.api_url}{path}"
         backoff = self.settings.retry_backoff_seconds
         last_exc: Exception | None = None
@@ -88,6 +100,7 @@ class SyncApiClient:
                     method,
                     url,
                     json=json_body,
+                    headers=headers,
                     timeout=self.settings.request_timeout_seconds,
                 )
             except requests.RequestException as exc:
@@ -147,17 +160,39 @@ class SyncApiClient:
         nullable_fields = {
             entity: set(names) for entity, names in raw.get("nullable_fields", {}).items()
         }
+        cursors = {
+            entity: SyncCursorConfig(
+                column=info.get("column") or "", value=info.get("value")
+            )
+            for entity, info in raw.get("cursors", {}).items()
+        }
 
         return SyncConfigResponse(
             batch_size=raw.get("batch_size", 1000),
             mapping=mapping,
             nullable_fields=nullable_fields,
+            cursors=cursors,
         )
 
-    def post_data_batch(self, entity: str, rows: list[dict[str, Any]]) -> dict:
+    def post_data_batch(
+        self, entity: str, rows: list[dict[str, Any]], batch_number: int,
+        cursor_after: dict[str, Any],
+    ) -> dict:
         """entity is 'user' or 'product'; endpoint path is pluralized."""
         path = f"/sync/data/{entity}s/"
-        return self._request("POST", path, json_body={"rows": rows})
+        return self._request(
+            "POST", path,
+            json_body={
+                "rows": rows,
+                "batch_number": batch_number,
+                "cursor_after": cursor_after,
+            },
+            headers={
+                "Idempotency-Key": (
+                    f"{self.session.headers['X-Sync-Run-ID']}:{entity}:{batch_number}"
+                )
+            },
+        )
 
     def post_report(self, payload: dict) -> None:
         self._request("POST", "/sync/report/", json_body=payload)

@@ -10,6 +10,7 @@ multiple schedules) is ever needed.
 """
 
 import time
+import uuid
 
 from sync_etl.config import Settings
 from sync_etl.logging_config import get_logger
@@ -19,6 +20,7 @@ logger = get_logger()
 
 
 def run_forever(settings: Settings) -> None:
+    instance_id = uuid.uuid4()
     interval_seconds = settings.sync_interval_hours * 3600
     logger.info(
         "Scheduler starting — sync will run every %d hour(s).",
@@ -27,7 +29,7 @@ def run_forever(settings: Settings) -> None:
 
     while True:
         try:
-            run_once(settings)
+            run_once(settings, instance_id=instance_id)
         except Exception:  # noqa: BLE001
             # A single cycle crashing must never kill the container — the
             # next cycle should still be attempted 24h later. Full

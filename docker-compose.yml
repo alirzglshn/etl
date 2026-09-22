@@ -4,6 +4,8 @@ services:
     build: .
     container_name: retano360-sync-etl
     restart: unless-stopped
+    command: ["daemon"]
+    network_mode: host
     env_file:
       - .env
     # No ports exposed — this container makes only outbound connections
